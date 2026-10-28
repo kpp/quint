@@ -21,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed `flatten` in the Rust evaluator silently returning an empty set for infinite inner sets, e.g. `Set(Int).flatten()`. It now reports `QNT501`
 - Fixed `oneOf` over a nested `setOfMaps` in the Rust backend, e.g. `setOfMaps(A, setOfMaps(B, C)).oneOf()`. Since v0.31.0, it could only pick |C| of the |C|^|B| inner maps, so simulations never reached the other states and could miss invariant violations
 - Fixed `oneOf` over a nested `setOfMaps` in the Rust backend enumerating all inner maps on every pick (since v0.28.0), which took tens of seconds and gigabytes of memory for large sets, e.g. `setOfMaps(1.to(2), setOfMaps(1.to(24), 1.to(2))).oneOf()` (#1999)
-
+- Fixed `oneOf` in the Rust backend retrying through all combinations of large sets whose individual bounds are small, e.g. `setOfMaps(1.to(16), 1.to(3))` with ~4.3×10^7 elements, which made the simulator hang when the `nondet` body was false. Retrying is now limited by the total number of combinations (#1998)
 
 ### Security
 

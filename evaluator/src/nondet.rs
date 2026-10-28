@@ -33,10 +33,16 @@ fn get_retry_threshold() -> u64 {
 }
 
 /// Check if we should retry nondet expressions based on set bounds.
-/// We only retry if all bounds are smaller than the threshold and finite.
+/// We only retry if the number of combinations of the bounds, which is the
+/// number of positions retrying can go through, is smaller than the threshold.
+/// Checking each bound alone is not enough: e.g. `setOfMaps(1.to(40),
+/// 1.to(3))` has 40 bounds of 3, but 3^40 combinations.
 fn should_retry_nondet(bounds: &[u64]) -> bool {
     let threshold = get_retry_threshold();
-    bounds.iter().all(|&bound| bound < threshold)
+    bounds
+        .iter()
+        .try_fold(1u64, |acc, &bound| acc.checked_mul(bound))
+        .is_some_and(|combinations| combinations < threshold)
 }
 
 /// Increment positions to the next combination, similar to counting in mixed-radix.

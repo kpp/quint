@@ -289,3 +289,47 @@ fn nat_pick_is_non_negative() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
+
+#[test]
+fn nondet_retries_small_sets() -> Result<(), Box<dyn std::error::Error>> {
+    // tuples(1.to(3), 1.to(3)) has 9 elements, so retrying goes through all
+    // of them until it finds the only one that makes the body true
+    let quint_content = "module main {
+          var x: (int, int)
+          val input = x
+          action init = {
+            nondet t = tuples(1.to(3), 1.to(3)).oneOf()
+            all { t == (3, 3), x' = t }
+          }
+          action step = x' = x
+        }";
+
+    run_test!(
+        quint_content,
+        Value::tuple(vec![Value::int(3), Value::int(3)].into())
+    )
+}
+
+#[test]
+fn nondet_does_not_retry_large_set_of_maps() -> Result<(), Box<dyn std::error::Error>> {
+    // Regression test for issue #1998: each bound of this set is 3, but it
+    // has 3^40 elements, so retrying would never finish
+    let quint_content = "module main {
+          var x: int
+          action init = {
+            nondet f = setOfMaps(1.to(40), 1.to(3)).oneOf()
+            all { f.get(1) > 3, x' = 0 }
+          }
+          action step = x' = x
+        }";
+
+    let parsed = helpers::parse(quint_content, None)?;
+    let init_def = parsed.find_definition_by_name("init")?;
+    let mut interpreter = Interpreter::new(parsed.table.clone());
+    let mut env = Env::with_rand_state(interpreter.var_storage.clone(), 0x42, Verbosity::default());
+
+    let init = interpreter.eval(&mut env, init_def.expr.clone());
+    assert_eq!(init.unwrap(), Value::bool(false));
+
+    Ok(())
+}
