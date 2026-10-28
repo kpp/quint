@@ -69,16 +69,13 @@ impl Value {
                     assert!(range_size > 0, "Range can't be zero");
                 }
 
-                let range_to_pick = if matches!(range.view(), ValueRef::MapSet(_, _)) {
-                    Value::set(range.as_set()?.into_owned())
-                } else {
-                    range.clone()
-                };
-
+                // `bounds` repeats the range bounds for each key, so each key
+                // consumes exactly the indexes needed to pick from the range,
+                // even if the range is itself a set of maps
                 let key_values = domain
                     .as_set_iter()?
                     .map(|key| {
-                        let value = range_to_pick.pick(indexes)?;
+                        let value = range.pick(indexes)?;
                         Ok((key, value))
                     })
                     .collect::<Result<_, _>>()?;

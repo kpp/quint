@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use quint_evaluator::{
     evaluator::{Env, Interpreter},
     helpers,
@@ -78,6 +80,58 @@ fn nested_set_of_maps_pick_test() -> Result<(), Box<dyn std::error::Error>> {
         }";
 
     run_test!(quint_content, Value::str("x".into()))
+}
+
+#[test]
+fn nested_set_of_maps_pick_does_not_enumerate_range() -> Result<(), Box<dyn std::error::Error>> {
+    // The range has 2^24 maps, so enumerating it would take gigabytes of memory
+    let quint_content = "module main {
+          var m: int -> (int -> int)
+          val input = m.keys() == 1.to(2) and m.keys().forall(k => m.get(k).keys() == 1.to(24))
+          action init = {
+            nondet f = setOfMaps(1.to(2), setOfMaps(1.to(24), 1.to(2))).oneOf()
+            m' = f
+          }
+          action step = m' = m
+        }";
+
+    run_test!(quint_content, Value::bool(true))
+}
+
+#[test]
+fn nested_set_of_maps_pick_reaches_all_maps() -> Result<(), Box<dyn std::error::Error>> {
+    // All 2^3 inner maps must be reachable, not only as many as the inner
+    // range has elements
+    let quint_content = "module main {
+          var m: int -> (int -> int)
+          val input = m
+          action init = {
+            nondet f = setOfMaps(Set(1), setOfMaps(1.to(3), 1.to(2))).oneOf()
+            m' = f
+          }
+          action step = m' = m
+        }";
+
+    let parsed = helpers::parse(quint_content, None)?;
+    let init_def = parsed.find_definition_by_name("init")?;
+    let input_def = parsed.find_definition_by_name("input")?;
+
+    let mut picked = HashSet::new();
+    for seed in 0..200 {
+        let mut interpreter = Interpreter::new(parsed.table.clone());
+        let mut env =
+            Env::with_rand_state(interpreter.var_storage.clone(), seed, Verbosity::default());
+
+        let init = interpreter.eval(&mut env, init_def.expr.clone());
+        assert_eq!(init.unwrap(), Value::bool(true));
+
+        interpreter.shift();
+
+        picked.insert(interpreter.eval(&mut env, input_def.expr.clone()).unwrap());
+    }
+    assert_eq!(picked.len(), 8);
+
+    Ok(())
 }
 
 #[test]
